@@ -12,6 +12,7 @@ from sklearn.model_selection import train_test_split
 import numpy as np
 from torchvision.transforms import ToPILImage
 from tqdm.auto import tqdm
+from torch.utils.data import Subset
 
 def main():
     # Set device to GPU if available
@@ -53,12 +54,14 @@ def main():
         transforms.Resize(size=(64, 64)),
         transforms.RandomHorizontalFlip(p=0.5),
         transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         transforms.Lambda(lambda x: x.repeat(3, 1, 1) if x.shape[0] == 1 else x),  # Convert grayscale to RGB
     ])
 
     test_transform = transforms.Compose([
         transforms.Resize(size=(64, 64)),
         transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         transforms.Lambda(lambda x: x.repeat(3, 1, 1) if x.shape[0] == 1 else x),  # Convert grayscale to RGB
     ])
 
@@ -81,60 +84,32 @@ def main():
 
     # Create dataset
     dataset = datasets.ImageFolder(root=data_path, transform=data_transform)
-    print(dataset)
 
-    # Convert dataset to lists of images and labels
-    X, y = [], []
+    # Get train and test indices
+    train_indices, test_indices = train_test_split(list(range(len(dataset))), test_size=0.2, random_state=42)
 
-    for img, label in dataset:
-        X.append(np.array(img))
-        y.append(label)
+    # Create subset datasets
+    train_dataset = Subset(dataset, train_indices)
+    test_dataset = Subset(dataset, test_indices)
 
-    # Convert lists to numpy arrays
-    X = np.array(X)
-    y = np.array(y)
-
-    # Debugging statement: print shapes and channels
-    print(f"Image data shape: {X.shape}")
-    print(f"Image data channels: {X.shape[1]}")
-
-    # Split dataset into train and test sets
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-    # Custom dataset class
     class CustomImageDataset(Dataset):
-        def __init__(self, images, labels, transform=None):
-            self.images = images
-            self.labels = labels
-            self.transform = transform
-            self.to_pil = ToPILImage()
+        def __init__(self, dataset):
+            self.dataset = dataset
 
         def __len__(self):
-            return len(self.images)
+            return len(self.dataset)
 
         def __getitem__(self, idx):
-            image = self.images[idx]
-            label = self.labels[idx]
-            image = self.to_pil(image)
-            if self.transform:
-                image = self.transform(image)
+            image, label = self.dataset[idx]
             return image, label
 
     # Create dataset instances
-    train_dataset = CustomImageDataset(images=X_train, labels=y_train, transform=data_transform)
-    test_dataset = CustomImageDataset(images=X_test, labels=y_test, transform=test_transform)
+    train_dataset = CustomImageDataset(dataset=train_dataset)
+    test_dataset = CustomImageDataset(dataset=test_dataset)
 
     # Print dataset shapes
-    print(f"X_train shape: {X_train.shape}")
-    print(f"y_train shape: {y_train.shape}")
-    print(f"X_test shape: {X_test.shape}")
-    print(f"y_test shape: {y_test.shape}")
-
-    # Get class names and class-to-index dictionary
-    class_names = dataset.classes
-    print(f"{class_names}")
-    class_dict = dataset.class_to_idx
-    print(f"{class_dict}")
+    print(f"Number of training samples: {len(train_dataset)}")
+    print(f"Number of test samples: {len(test_dataset)}")
 
     # Create dataloaders
     train_dataloader = DataLoader(train_dataset, batch_size=32, shuffle=True, num_workers=0)
@@ -232,10 +207,10 @@ def main():
         torch.cuda.manual_seed(42)
 
     # Number of epochs
-    NUM_EPOCHS = 5
+    NUM_EPOCHS = 20
 
     # Instantiate the model
-    model_0 = TinyVGG(input_shape=3, hidden_units=10, output_shape=len(class_dict)).to(device)
+    model_0 = TinyVGG(input_shape=3, hidden_units=10, output_shape=10).to(device)
 
     # Setup loss function and optimizer
     loss_fn = nn.CrossEntropyLoss()
