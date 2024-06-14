@@ -15,41 +15,40 @@ from tqdm.auto import tqdm
 from torch.utils.data import Subset
 
 def main():
-    # Set device to GPU if available
+    #Naudojam GPU, jei nera CPU tada
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    # Dataset directory path
+    # Dataset dir path
     data_path = Path("raw-img/")
 
-    # Function to print directory contents
+    # Pasidarom funkcija kuri printints dir ir failu skaiciu
     def dir_walk(dir_path):
         for dirpath, dirnames, filenames in os.walk(dir_path):
             print(f"Turime {len(dirnames)} direktorijas ir {len(filenames)} failus direktorijoje: {dirpath}")
 
-    # Optionally print directory contents
     # dir_walk(data_path)
 
-    # Get list of all image paths
+    #Pasidarom lista visu img paths
     image_path_list = list(data_path.glob("*/*.*"))
 
-    # Select a random image path
+    # Pasirenkam random img
     random_image_path = random.choice(image_path_list)
     print(f"Random image path: {random_image_path}")
 
-    # Get image class (directory name)
+    # Pasiziurim img class (directory name sitam atveji)
     image_class = random_image_path.parent.stem
     print(f"Image class: {image_class}")
 
-    # Open the image
+    # Open image
     img = Image.open(random_image_path)
 
-    # Print image metadata
+    # Print img data
     print(f"Random image path: {random_image_path}")
     print(f"Random image class: {image_class}")
     print(f"Random image height: {img.height}")
     print(f"Random image width: {img.width}")
 
-    # Define data transformations
+    # Apsirasom train ir test transformation
     data_transform = transforms.Compose([
         transforms.Resize(size=(64, 64)),
         transforms.RandomHorizontalFlip(p=0.5),
@@ -79,7 +78,7 @@ def main():
                 ax[1].axis(False)
                 fig.suptitle(f"Class: {image_path.parent.stem}", fontsize=16)
 
-    # Plot some transformed images
+    # Plot transformed images
     plot_transformed_images(image_paths=image_path_list, transform=data_transform, n=3)
 
     # Create dataset
@@ -88,7 +87,7 @@ def main():
     # Get train and test indices
     train_indices, test_indices = train_test_split(list(range(len(dataset))), test_size=0.2, random_state=42)
 
-    # Create subset datasets
+    # Pasidarom train ir test subsetus
     train_dataset = Subset(dataset, train_indices)
     test_dataset = Subset(dataset, test_indices)
 
@@ -107,11 +106,11 @@ def main():
     train_dataset = CustomImageDataset(dataset=train_dataset)
     test_dataset = CustomImageDataset(dataset=test_dataset)
 
-    # Print dataset shapes
+    #Pasiziurim shapes
     print(f"Number of training samples: {len(train_dataset)}")
     print(f"Number of test samples: {len(test_dataset)}")
 
-    # Create dataloaders
+    #Pasikuriam dataloaderius
     train_dataloader = DataLoader(train_dataset, batch_size=32, shuffle=True, num_workers=0)
     test_dataloader = DataLoader(test_dataset, batch_size=32, shuffle=False, num_workers=0)
     print(train_dataloader)
@@ -120,7 +119,7 @@ def main():
     print(f"Batch shape: {img_custom.shape}")
     print(f"Label shape: {label_custom.shape}")
 
-    # Define the model
+    #Aprasom modelio architektura
     class TinyVGG(nn.Module):
         def __init__(self, input_shape: int, hidden_units: int, output_shape: int):
             super().__init__()
@@ -201,23 +200,41 @@ def main():
             results["test_acc"].append(test_acc)
         return results
 
-    # Set random seeds
+    #Setupinam random seed
     torch.manual_seed(42)
     if torch.cuda.is_available():
         torch.cuda.manual_seed(42)
 
-    # Number of epochs
-    NUM_EPOCHS = 20
+    NUM_EPOCHS = 10
 
-    # Instantiate the model
-    model_0 = TinyVGG(input_shape=3, hidden_units=10, output_shape=10).to(device)
+    # Paleidziam modeli
+    model_0 = TinyVGG(input_shape=3, hidden_units=30, output_shape=10).to(device)
 
     # Setup loss function and optimizer
     loss_fn = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model_0.parameters(), lr=0.001)
 
-    # Train the model
+    # Traininam
     results = train(model=model_0, train_dataloader=train_dataloader, test_dataloader=test_dataloader, optimizer=optimizer, loss_fn=loss_fn, epochs=NUM_EPOCHS, device=device)
+    print(results)
+
+    #Pasikuriu naujo modelio instance (si karta naudosiu  transffer learning, imsiu Resnet50 pretrained modeli)
+    model_1 = torchvision.models.resnet50(weights="IMAGENET1K_V1")
+    #Uzsaldom visus sluoksnius isksyrus paskutini
+    for param in model_1.parameters():
+        param.requires_grad = False
+
+    #Aprasom paskutini layeri
+    model_1.fc = nn.Linear(2048,10)
+    #Siunciam i devide
+    model_1.to(device)
+
+    # Setup loss function and optimizer
+    loss_fn = nn.CrossEntropyLoss()
+    optimizer = torch.optim.Adam(model_1.parameters(), lr=0.001)
+
+    # Traininam resnet modeli
+    results = train(model=model_1, train_dataloader=train_dataloader, test_dataloader=test_dataloader, optimizer=optimizer, loss_fn=loss_fn, epochs=NUM_EPOCHS, device=device)
     print(results)
 
 if __name__ == "__main__":
