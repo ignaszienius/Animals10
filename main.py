@@ -13,6 +13,7 @@ import numpy as np
 from torchvision.transforms import ToPILImage
 from tqdm.auto import tqdm
 from torch.utils.data import Subset
+from typing import Tuple, Dict, List
 
 def main():
     #Naudojam GPU, jei nera CPU tada
@@ -111,8 +112,8 @@ def main():
     print(f"Number of test samples: {len(test_dataset)}")
 
     #Pasikuriam dataloaderius
-    train_dataloader = DataLoader(train_dataset, batch_size=32, shuffle=True, num_workers=0)
-    test_dataloader = DataLoader(test_dataset, batch_size=32, shuffle=False, num_workers=0)
+    train_dataloader = DataLoader(train_dataset, batch_size=64, shuffle=True, num_workers=0)
+    test_dataloader = DataLoader(test_dataset, batch_size=64, shuffle=False, num_workers=0)
     print(train_dataloader)
 
     img_custom, label_custom = next(iter(train_dataloader))
@@ -208,21 +209,21 @@ def main():
     NUM_EPOCHS = 10
 
     # Paleidziam modeli
-    model_0 = TinyVGG(input_shape=3, hidden_units=30, output_shape=10).to(device)
+    model_0 = TinyVGG(input_shape=3, hidden_units=100, output_shape=10).to(device)
 
     # Setup loss function and optimizer
     loss_fn = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model_0.parameters(), lr=0.001)
+    optimizer = torch.optim.Adam(model_0.parameters(), lr=0.0001)
 
     # Traininam
-    results = train(model=model_0, train_dataloader=train_dataloader, test_dataloader=test_dataloader, optimizer=optimizer, loss_fn=loss_fn, epochs=NUM_EPOCHS, device=device)
-    print(results)
+    results_0 = train(model=model_0, train_dataloader=train_dataloader, test_dataloader=test_dataloader, optimizer=optimizer, loss_fn=loss_fn, epochs=NUM_EPOCHS, device=device)
+    print(results_0)
 
     #Pasikuriu naujo modelio instance (si karta naudosiu  transffer learning, imsiu Resnet50 pretrained modeli)
     model_1 = torchvision.models.resnet50(weights="IMAGENET1K_V1")
     #Uzsaldom visus sluoksnius isksyrus paskutini
-    for param in model_1.parameters():
-        param.requires_grad = False
+    #for param in model_1.parameters():
+    #    param.requires_grad = False
 
     #Aprasom paskutini layeri
     model_1.fc = nn.Linear(2048,10)
@@ -231,12 +232,43 @@ def main():
 
     # Setup loss function and optimizer
     loss_fn = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model_1.parameters(), lr=0.001)
+    optimizer = torch.optim.Adam(model_1.parameters(), lr=0.0001)
 
     # Traininam resnet modeli
-    results = train(model=model_1, train_dataloader=train_dataloader, test_dataloader=test_dataloader, optimizer=optimizer, loss_fn=loss_fn, epochs=NUM_EPOCHS, device=device)
-    print(results)
+    results_1 = train(model=model_1, train_dataloader=train_dataloader, test_dataloader=test_dataloader, optimizer=optimizer, loss_fn=loss_fn, epochs=NUM_EPOCHS, device=device)
+    print(results_1)
 
+    #Apsirasom loss ir accuracy grafiku atvaizdavimo funkcija
+    def plot_loss_curves(results: Dict[str,List[float]]):
+
+        loss = results["train_loss"]
+        test_loss = results["test_loss"]
+
+        accuracy = results["train_acc"]
+        test_accuracy = results["test_acc"]
+
+        epochs = range(len(results["train_loss"]))
+
+        plt.figure(figsize=(15,7))
+
+        #Plot loss
+        plt.subplot(1,2,1)
+        plt.plot(epochs, loss, label="train_loss")
+        plt.plot(epochs, test_loss, label="test_loss")
+        plt.title("Loss")
+        plt.xlabel("Epochs")
+        plt.legend()
+
+        #Plot acc
+        plt.subplot(1,2,2)
+        plt.plot(epochs, accuracy, label="train_acc")
+        plt.plot(epochs, test_accuracy, label="test_acc")
+        plt.title("Accuracy")
+        plt.xlabel("Epochs")
+        plt.legend();
+
+    plot_loss_curves(results_0)
+    plot_loss_curves(results_1)
 if __name__ == "__main__":
     main()
 
